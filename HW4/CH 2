@@ -1,0 +1,14 @@
+// You can define a private sentinel object for this
+private static final Object UNINITIALIZED = new Object();
+
+// Change visitVariableExpr to:
+@Override
+public Object visitVariableExpr(Expr.Variable expr) {
+    Object value = environment.getVar(expr.name);
+    if (value == uninitialized) {
+        throw new RuntimeError(expr.name,
+            "Variable must be initialized before use.");
+    }
+    return value;
+}
+
