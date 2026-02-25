@@ -1,0 +1,83 @@
+// Add two new fields to Parser:
+
+private boolean allowExpression;
+private boolean foundExpression = false;
+
+// Then define this method:
+
+Object parseRepl() {
+  allowExpression = true;
+  List<Stmt> statements = new ArrayList<>();
+  while (!isAtEnd()) {
+    statements.add(declaration());
+
+    if (foundExpression) {
+      Stmt last = statements.get(statements.size() - 1);
+      return ((Stmt.Expression) last).expression;
+    }
+
+    allowExpression = false;
+  }
+
+  return statements;
+}
+
+// Change expressionStatement() to:
+
+private Stmt expressionStatement() {
+    Expr expr = expression();
+
+    if (allowExpression && isAtEnd()) {
+        foundExpression = true; // signal that we found a single expression
+    } else {
+        consume(SEMICOLON, "Expected ';' after expression.");
+    }
+
+    return new Stmt.Expression(expr);
+}
+
+// In Interpreter, add:
+
+String interpret(Expr expression) {
+  try {
+    Object value = evaluate(expression);
+    return stringify(value);
+  } catch (RuntimeError error) {
+    Lox.runtimeError(error);
+    return null;
+  }
+}
+
+// In Lox, change runPrompt() to:
+
+private static void runPrompt() throws IOException {
+    InputStreamReader input = new InputStreamReader(System.in);
+    BufferedReader reader = new BufferedReader(input);
+
+    for (;;) {
+        hadError = false;
+
+        System.out.print("> ");
+        String line = reader.readLine();
+        if (line == null) break;
+
+        Scanner scanner = new Scanner(line);
+        List<Token> tokens = scanner.scanTokens();
+
+        Parser parser = new Parser(tokens);
+        Object syntax = parser.parseRepl();
+
+        if (hadError) continue;
+
+        if (syntax instanceof List) {
+            interpreter.interpret((List<Stmt>) syntax);
+        } else if (syntax instanceof Expr) {
+            String result = interpreter.interpret((Expr) syntax);
+            if (result != null) {
+                System.out.println("= " + result);
+            }
+        }
+    }
+}
+
+
