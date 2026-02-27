@@ -1,0 +1,51 @@
+// Add to Parser
+
+private int loopDepth = 0;
+
+// Parse break statement
+
+if (match(BREAK)) return breakStatement();
+
+private Stmt breakStatement() {
+    if (loopDepth == 0) {
+        error(previous(), "Must be inside a loop to use 'break'.");
+    }
+    consume(SEMICOLON, "Expect ';' after 'break'.");
+    return new Stmt.Break();
+}
+
+// Update loopDepth Example for while loops
+try {
+    loopDepth++;
+    Stmt body = statement();
+    return new Stmt.While(condition, body);
+} finally {
+    loopDepth--;
+}
+
+// Add to Interpreter
+
+// Runtime exception for breaks
+
+private static class BreakException extends RuntimeException {}
+
+// Break statement
+
+@Override
+public Void visitBreakStmt(Stmt.Break stmt) {
+    throw new BreakException();
+}
+
+// Breaks in while loops:
+
+@Override
+public Void visitWhileStmt(Stmt.While stmt) {
+    try {
+        while (isTruthy(evaluate(stmt.condition))) {
+            execute(stmt.body);
+        }
+    } catch (BreakException ex) {
+        // Exit loop and continue after it
+    }
+    return null;
+}
