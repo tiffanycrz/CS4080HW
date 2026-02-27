@@ -1,0 +1,17 @@
+fun ifElse(condition, thenBranch, elseBranch) {
+  if (condition) {
+    thenBranch();
+  } else {
+    elseBranch();
+  }
+}
+
+fun sayYes() {
+  print "Yes";
+}
+
+fun sayNo() {
+  print "No";
+}
+
+ifElse(true, sayYes, sayNo);
