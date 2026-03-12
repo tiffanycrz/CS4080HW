@@ -1,0 +1,124 @@
+// GenerateAst.java
+// CHANGED: Added classMethods so the AST can store static methods separately
+defineAst(outputDir, "Stmt", Arrays.asList(
+  "Block      : List<Stmt> statements",
+
+  // BEFORE
+  // "Class      : Token name, Expr.Variable superclass, List<Stmt.Function> methods",
+
+  // AFTER
+  // ADDED List<Stmt.Function> classMethods
+  "Class      : Token name, Expr.Variable superclass," +
+               " List<Stmt.Function> methods," +
+               " List<Stmt.Function> classMethods",
+
+  "Expression : Expr expression",
+  "Function   : Token name, List<Token> params, List<Stmt> body",
+  "If         : Expr condition, Stmt thenBranch, Stmt elseBranch",
+  "Print      : Expr expression",
+  "Return     : Token keyword, Expr value",
+  "Var        : Token name, Expr initializer",
+  "While      : Expr condition, Stmt body"
+));
+
+// Parser.java
+// Modify classDeclaration()
+private Stmt classDeclaration() {
+  Token name = consume(IDENTIFIER, "Expect class name.");
+
+  Expr.Variable superclass = null;
+  if (match(LESS)) {
+    consume(IDENTIFIER, "Expect superclass name.");
+    superclass = new Expr.Variable(previous());
+  }
+
+  consume(LEFT_BRACE, "Expect '{' before class body.");
+
+  List<Stmt.Function> methods = new ArrayList<>();
+
+  // ADDED: separate list for static methods
+  List<Stmt.Function> classMethods = new ArrayList<>();
+
+  while (!check(RIGHT_BRACE) && !isAtEnd()) {
+
+    // NEW: detect "class" keyword before method
+    if (match(CLASS)) {
+      classMethods.add(function("method"));
+    } else {
+      methods.add(function("method"));
+    }
+
+  }
+
+  consume(RIGHT_BRACE, "Expect '}' after class body.");
+
+  // CHANGED: pass classMethods to AST
+  return new Stmt.Class(name, superclass, methods, classMethods);
+}
+// The parser now separates static methods from instance methods.
+
+// LoxClass.java
+// Change class inheritance
+
+// BEFORE
+class LoxClass implements LoxCallable {
+
+// AFTER
+// CHANGED: LoxClass now extends LoxInstance so classes themselves can hold fields
+class LoxClass extends LoxInstance implements LoxCallable {
+
+// Update constructor
+// BEFORE
+/*
+LoxClass(String name, LoxClass superclass,
+         Map<String, LoxFunction> methods) {
+  this.superclass = superclass;
+  this.name = name;
+  this.methods = methods;
+}
+*/
+
+// AFTER
+// CHANGED: call super(null) because class objects don't have their own class
+LoxClass(String name, LoxClass superclass,
+         Map<String, LoxFunction> methods) {
+
+  super(null); // class object doesn't belong to another class
+
+  this.superclass = superclass;
+  this.name = name;
+  this.methods = methods;
+}
+// This implements the metaclass trick from Smalltalk/Ruby:
+
+// Interpreter.java
+// Inside visitClassStmt().
+
+// Existing method creation
+Map<String, LoxFunction> methods = new HashMap<>();
+
+for (Stmt.Function method : stmt.methods) {
+  LoxFunction function =
+      new LoxFunction(method, environment,
+          method.name.lexeme.equals("init"));
+  methods.put(method.name.lexeme, function);
+}
+// Add static method support
+// ADDED: create map for class (static) methods
+Map<String, LoxFunction> classMethods = new HashMap<>();
+
+for (Stmt.Function method : stmt.classMethods) {
+  LoxFunction function =
+      new LoxFunction(method, environment, false);
+
+  classMethods.put(method.name.lexeme, function);
+}
+// Create the class
+LoxClass klass =
+    new LoxClass(stmt.name.lexeme, superclass, methods);
+
+// Attach static methods to the class object
+// ADDED: attach static methods to the class object
+for (Map.Entry<String, LoxFunction> entry : classMethods.entrySet()) {
+  klass.set(entry.getKey(), entry.getValue());
+}
