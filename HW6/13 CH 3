@@ -1,0 +1,77 @@
+// ++ Increment Operator
+// TokenType.java, add a new token.
+
+PLUS_PLUS,
+
+// Scanner.java, detect ++.
+
+case '+':
+  if (match('+')) {
+    addToken(PLUS_PLUS);
+  } else {
+    addToken(PLUS);
+  }
+  break;
+
+// Modify unary() in Parser.java.
+
+private Expr unary() {
+  if (match(PLUS_PLUS)) {
+    Token operator = previous();
+    Expr right = unary();
+    return new Expr.Increment(operator, right);
+  }
+
+  if (match(BANG, MINUS)) {
+    Token operator = previous();
+    Expr right = unary();
+    return new Expr.Unary(operator, right);
+  }
+
+  return call();
+}
+
+// Expr.java, add:
+
+static class Increment extends Expr {
+  final Token operator;
+  final Expr variable;
+
+  Increment(Token operator, Expr variable) {
+    this.operator = operator;
+    this.variable = variable;
+  }
+
+  @Override
+  <R> R accept(Visitor<R> visitor) {
+    return visitor.visitIncrementExpr(this);
+  }
+}
+
+// Stmt.java add visitor:
+
+R visitIncrementExpr(Increment expr);
+
+// Interpreter.java:
+
+@Override
+public Object visitIncrementExpr(Expr.Increment expr) {
+  if (!(expr.variable instanceof Expr.Variable)) {
+    throw new RuntimeError(expr.operator,
+        "Operand must be a variable.");
+  }
+
+  String name = ((Expr.Variable)expr.variable).name.lexeme;
+
+  Object value = environment.get(((Expr.Variable)expr.variable).name);
+
+  if (!(value instanceof Double)) {
+    throw new RuntimeError(expr.operator,
+        "Operand must be a number.");
+  }
+
+  double newValue = (double)value + 1;
+  environment.assign(((Expr.Variable)expr.variable).name, newValue);
+
+  return newValue;
+}
