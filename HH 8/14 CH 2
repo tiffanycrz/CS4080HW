@@ -1,0 +1,110 @@
+// chunk.h changes
+typedef enum {
+  OP_CONSTANT,
+
+  // ADDED
+  OP_CONSTANT_LONG,
+
+  OP_NIL,
+  OP_TRUE,
+  OP_FALSE,
+  ...
+} OpCode;
+
+// ADDED
+// writes constant using OP_CONSTANT or OP_CONSTANT_LONG
+void writeConstant(Chunk* chunk, Value value, int line);
+
+// chunk.c changes
+// ADDED FUNCTION
+void writeConstant(Chunk* chunk, Value value, int line) {
+  // add constant to constant table
+  int constantIndex = addConstant(chunk, value);
+
+  // if index fits in one byte, use normal instruction
+  if (constantIndex <= 256) {
+    writeChunk(chunk, OP_CONSTANT, line);
+    writeChunk(chunk, (uint8_t)constantIndex, line);
+  } else {
+    // otherwise use OP_CONSTANT_LONG
+    writeChunk(chunk, OP_CONSTANT_LONG, line);
+
+    // write operand as 3 bytes
+    writeChunk(chunk,
+        (constantIndex >> 16) & 0xFF,
+        line);
+
+    writeChunk(chunk,
+        (constantIndex >> 8) & 0xFF,
+        line);
+
+    writeChunk(chunk,
+        constantIndex & 0xFF,
+        line);
+  }
+}
+
+// debug.c changes
+// ADDED
+// handles OP_CONSTANT_LONG instruction (3-byte operand)
+static int constantLongInstruction(
+    const char* name,
+    Chunk* chunk,
+    int offset) {
+
+  // combine 3 bytes into 24-bit integer
+  uint32_t constant =
+      (chunk->code[offset + 1] << 16) |
+      (chunk->code[offset + 2] << 8)  |
+       chunk->code[offset + 3];
+
+  printf("%-16s %4d '", name, constant);
+  printValue(
+      chunk->constants.values[constant]
+  );
+  printf("'\n");
+
+  return offset + 4;
+}
+
+// ADDED
+// handles OP_CONSTANT_LONG index
+static int constantLongInstruction(
+    const char* name,
+    Chunk* chunk,
+    int offset) {
+
+  uint32_t constant =
+      (chunk->code[offset + 1] << 16) |
+      (chunk->code[offset + 2] << 8)  |
+       chunk->code[offset + 3];
+
+  printf("%-16s %4d '", name, constant);
+  printValue(chunk->constants.values[constant]);
+  printf("'\n");
+
+  return offset + 4;
+}
+
+// CHANGED
+// use getLine() because lines are now run-length encoded
+
+int line = getLine(chunk, offset);
+
+if (offset > 0 &&
+    line == getLine(chunk, offset - 1)) {
+
+  printf("   | ");
+
+} else {
+
+  printf("%4d ", line);
+}
+
+
+// Add case in switch
+case OP_CONSTANT_LONG:
+  return constantLongInstruction(
+      "OP_CONSTANT_LONG",
+      chunk,
+      offset);
