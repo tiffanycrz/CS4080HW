@@ -1,0 +1,197 @@
+// chunck.h
+#ifndef clox_chunk_h
+#define clox_chunk_h
+
+#include "common.h"
+#include "value.h"
+
+typedef enum {
+  OP_CONSTANT,
+  OP_NIL,
+  OP_TRUE,
+  OP_FALSE,
+  OP_POP,
+  OP_GET_LOCAL,
+  OP_SET_LOCAL,
+  OP_GET_GLOBAL,
+  OP_DEFINE_GLOBAL,
+  OP_SET_GLOBAL,
+  OP_GET_UPVALUE,
+  OP_SET_UPVALUE,
+  OP_GET_PROPERTY,
+  OP_SET_PROPERTY,
+  OP_GET_SUPER,
+  OP_EQUAL,
+  OP_GREATER,
+  OP_LESS,
+  OP_ADD,
+  OP_SUBTRACT,
+  OP_MULTIPLY,
+  OP_DIVIDE,
+  OP_NOT,
+  OP_NEGATE,
+  OP_PRINT,
+  OP_JUMP,
+  OP_JUMP_IF_FALSE,
+  OP_LOOP,
+  OP_CALL,
+  OP_INVOKE,
+  OP_SUPER_INVOKE,
+  OP_CLOSURE,
+  OP_CLOSE_UPVALUE,
+  OP_RETURN,
+  OP_CLASS,
+  OP_INHERIT,
+  OP_METHOD
+} OpCode;
+
+typedef struct {
+  int count;
+  int capacity;
+  uint8_t* code;
+
+  // CHANGED
+  // Instead of storing one line per instruction, store runs of lines using run-length encoding.
+
+  int* lines;        // stores line number
+  int* lineCounts;   // stores how many instructions belong to that line
+
+  int lineCount;     // number of RLE entries
+  int lineCapacity;  // capacity for RLE arrays
+
+  ValueArray constants;
+} Chunk;
+
+void initChunk(Chunk* chunk);
+void freeChunk(Chunk* chunk);
+
+void writeChunk(Chunk* chunk, uint8_t byte, int line);
+
+int addConstant(Chunk* chunk, Value value);
+
+// Returns the source line for a given instruction index
+int getLine(Chunk* chunk, int instructionIndex);
+
+#endif
+
+// chunck.c
+#include <stdlib.h>
+
+#include "chunk.h"
+#include "memory.h"
+#include "vm.h"
+
+void initChunk(Chunk* chunk) {
+  chunk->count = 0;
+  chunk->capacity = 0;
+  chunk->code = NULL;
+
+  // CHANGED
+  // initialize RLE line storage
+  chunk->lines = NULL;
+  chunk->lineCounts = NULL;
+  chunk->lineCount = 0;
+  chunk->lineCapacity = 0;
+
+  initValueArray(&chunk->constants);
+}
+
+void freeChunk(Chunk* chunk) {
+  FREE_ARRAY(uint8_t, chunk->code, chunk->capacity);
+
+  // CHANGED
+  // free RLE arrays instead of single lines array
+  FREE_ARRAY(int, chunk->lines, chunk->lineCapacity);
+  FREE_ARRAY(int, chunk->lineCounts, chunk->lineCapacity);
+
+  freeValueArray(&chunk->constants);
+
+  initChunk(chunk);
+}
+
+void writeChunk(Chunk* chunk, uint8_t byte, int line) {
+
+  // grow bytecode array if needed
+  if (chunk->capacity < chunk->count + 1) {
+
+    int oldCapacity = chunk->capacity;
+    chunk->capacity = GROW_CAPACITY(oldCapacity);
+
+    chunk->code = GROW_ARRAY(
+        uint8_t,
+        chunk->code,
+        oldCapacity,
+        chunk->capacity
+    );
+  }
+
+  chunk->code[chunk->count] = byte;
+  chunk->count++;
+
+  // CHANGED
+  // Run-length encoding logic for line numbers
+  // if this is the first line entry OR the line changed
+  if (chunk->lineCount == 0 ||
+      chunk->lines[chunk->lineCount - 1] != line) {
+
+    // grow RLE arrays if needed
+    if (chunk->lineCapacity < chunk->lineCount + 1) {
+
+      int oldCapacity = chunk->lineCapacity;
+      chunk->lineCapacity = GROW_CAPACITY(oldCapacity);
+
+      chunk->lines = GROW_ARRAY(
+          int,
+          chunk->lines,
+          oldCapacity,
+          chunk->lineCapacity
+      );
+
+      chunk->lineCounts = GROW_ARRAY(
+          int,
+          chunk->lineCounts,
+          oldCapacity,
+          chunk->lineCapacity
+      );
+    }
+
+    // create new run
+    chunk->lines[chunk->lineCount] = line;
+    chunk->lineCounts[chunk->lineCount] = 1;
+
+    chunk->lineCount++;
+  }
+  else {
+    // same line, increment run length
+    chunk->lineCounts[chunk->lineCount - 1]++;
+  }
+}
+
+int addConstant(Chunk* chunk, Value value) {
+
+  push(value);
+
+  writeValueArray(&chunk->constants, value);
+
+  pop();
+
+  return chunk->constants.count - 1;
+}
+
+// Returns the line number for a given instruction index
+int getLine(Chunk* chunk, int instructionIndex) {
+
+  int accumulated = 0;
+
+  // iterate through RLE entries
+  for (int i = 0; i < chunk->lineCount; i++) {
+
+    accumulated += chunk->lineCounts[i];
+
+    if (instructionIndex < accumulated) {
+      return chunk->lines[i];
+    }
+  }
+
+  return -1; // should never occur
+}
