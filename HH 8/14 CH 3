@@ -1,0 +1,61 @@
+#include <stdlib.h>
+#include <string.h>
+
+#define HEAP_SIZE 1024*1024
+
+// header before each block
+typedef struct Block {
+    size_t size;      // size of block
+    int free;         // 1 = free, 0 = used
+    struct Block* next;
+} Block;
+
+static Block* heap = NULL;
+
+// call once at start
+void init_heap() {
+    heap = (Block*) malloc(HEAP_SIZE); // only malloc allowed
+    heap->size = HEAP_SIZE - sizeof(Block);
+    heap->free = 1;      // whole heap starts free
+    heap->next = NULL;
+}
+
+void* reallocate(void* ptr, size_t size) {
+
+    // works like malloc
+    if (ptr == NULL) {
+        Block* curr = heap;
+
+        // find free block big enough
+        while (curr) {
+            if (curr->free && curr->size >= size) {
+                curr->free = 0; // mark used
+                return (char*)curr + sizeof(Block); // return usable memory
+            }
+            curr = curr->next;
+        }
+        return NULL; // no space
+    }
+
+    // works like free
+    if (size == 0) {
+        Block* block = (Block*)((char*)ptr - sizeof(Block));
+        block->free = 1; // mark free again
+        return NULL;
+    }
+
+    // works like realloc (resize)
+    Block* block = (Block*)((char*)ptr - sizeof(Block));
+
+    if (block->size >= size) return ptr; // already big enough
+
+    // allocate new space
+    void* new_ptr = reallocate(NULL, size);
+
+    if (new_ptr) {
+        memcpy(new_ptr, ptr, block->size); // copy old data
+        block->free = 1; // free old block
+    }
+
+    return new_ptr;
+}
