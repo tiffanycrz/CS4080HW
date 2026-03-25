@@ -1,0 +1,21 @@
+// Old version
+case OP_NEGATE:
+  if (!IS_NUMBER(peek(0))) {
+    runtimeError("Operand must be a number.");
+    return INTERPRET_RUNTIME_ERROR;
+  }
+  push(NUMBER_VAL(-AS_NUMBER(pop())));
+  break;
+
+
+// New version (no pop or push)
+case OP_NEGATE:
+  if (!IS_NUMBER(peek(0))) {
+    runtimeError("Operand must be a number.");
+    return INTERPRET_RUNTIME_ERROR;
+  }
+
+  // directly modify value already on top of stack
+  vm.stackTop[-1] = NUMBER_VAL(-AS_NUMBER(vm.stackTop[-1]));
+
+  break;
