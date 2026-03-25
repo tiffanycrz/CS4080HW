@@ -1,0 +1,107 @@
+// vm.h
+
+typedef struct {
+  CallFrame frames[FRAMES_MAX];
+  int frameCount;
+
+  // dynamic stack instead of fixed array
+  Value* stack;       // pointer to stack memory
+  Value* stackTop;    // next free slot
+  int stackCapacity;  // current size of stack
+
+  Table globals;
+  Table strings;
+
+  ObjString* initString;
+  ObjUpvalue* openUpvalues;
+
+  size_t bytesAllocated;
+  size_t nextGC;
+
+  Obj* objects;
+
+  int grayCount;
+  int grayCapacity;
+  Obj** grayStack;
+
+} VM;
+
+
+// vm.c
+
+#define INITIAL_STACK_SIZE 256
+
+// reset stack pointer
+static void resetStack() {
+  vm.stackTop = vm.stack;
+  vm.frameCount = 0;
+  vm.openUpvalues = NULL;
+}
+
+// initialize VM
+void initVM() {
+  // allocate initial stack memory
+  vm.stackCapacity = INITIAL_STACK_SIZE;
+  vm.stack = (Value*)malloc(sizeof(Value) * vm.stackCapacity);
+
+  resetStack();
+
+  vm.objects = NULL;
+
+  vm.bytesAllocated = 0;
+  vm.nextGC = 1024 * 1024;
+
+  vm.grayCount = 0;
+  vm.grayCapacity = 0;
+  vm.grayStack = NULL;
+
+  initTable(&vm.globals);
+  initTable(&vm.strings);
+
+  vm.initString = copyString("init", 4);
+
+  defineNative("clock", clockNative);
+}
+
+// free stack memory
+void freeVM() {
+  free(vm.stack); // release dynamic stack memory
+
+  freeTable(&vm.globals);
+  freeTable(&vm.strings);
+
+  vm.initString = NULL;
+
+  freeObjects();
+}
+
+// increase stack size when full
+static void growStack() {
+  int oldCapacity = vm.stackCapacity;
+
+  // double size to reduce number of realloc calls
+  vm.stackCapacity *= 2;
+
+  vm.stack = (Value*)realloc(vm.stack,
+      sizeof(Value) * vm.stackCapacity);
+
+  // update stackTop pointer in case memory moved
+  vm.stackTop = vm.stack + oldCapacity;
+}
+
+// push value onto stack
+void push(Value value) {
+  // check for overflow
+  if (vm.stackTop - vm.stack >= vm.stackCapacity) {
+    growStack();
+  }
+
+  *vm.stackTop = value;
+  vm.stackTop++;
+}
+
+// pop value from stack
+Value pop() {
+  vm.stackTop--;
+  return *vm.stackTop;
+}
