@@ -17,13 +17,13 @@ typedef enum {
 // Parser function for conditional expressions
 static void conditional() {
   // Parse the "then" expression (between ? and :)
-  parsePrecedence(PREC_CONDITIONAL);
+  parsePrecedence(compiler, PREC_CONDITIONAL);
 
   // Expect the colon separating then/else
-  consume(TOKEN_COLON, "Expect ':' after then branch of conditional operator.");
+  consume(compiler, TOKEN_COLON, "Expect ':' after then branch of conditional operator.");
 
   // Parse the "else" expression (after :)
-  parsePrecedence(PREC_ASSIGNMENT);
+  parsePrecedence(compiler, PREC_ASSIGNMENT);
 }
 
 // Add it to the parse rule table
