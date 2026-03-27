@@ -1,0 +1,34 @@
+// compiler.c
+typedef enum {
+  PREC_NONE,
+  PREC_ASSIGNMENT,  // =
+  PREC_CONDITIONAL, // ?: new precedence level
+  PREC_OR,          // or
+  PREC_AND,         // and
+  PREC_EQUALITY,    // == !=
+  PREC_COMPARISON,  // < > <= >=
+  PREC_TERM,        // + -
+  PREC_FACTOR,      // * /
+  PREC_UNARY,       // ! -
+  PREC_CALL,        // . ()
+  PREC_PRIMARY
+} Precedence;
+
+// Parser function for conditional expressions
+static void conditional(bool canAssign) {
+  // Parse the "then" expression (between ? and :)
+  parsePrecedence(PREC_CONDITIONAL);
+
+  // Expect the colon separating then/else
+  consume(TOKEN_COLON, "Expect ':' after then branch of conditional operator.");
+
+  // Parse the "else" expression (after :)
+  parsePrecedence(PREC_ASSIGNMENT);
+}
+
+// Add it to the parse rule table
+ParseRule rules[] = {
+  // other rules
+  [TOKEN_QUESTION] = {NULL, conditional, PREC_CONDITIONAL},
+  // other rules
+};
