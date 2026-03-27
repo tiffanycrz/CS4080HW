@@ -15,7 +15,7 @@ typedef enum {
 } Precedence;
 
 // Parser function for conditional expressions
-static void conditional(bool canAssign) {
+static void conditional() {
   // Parse the "then" expression (between ? and :)
   parsePrecedence(PREC_CONDITIONAL);
 
