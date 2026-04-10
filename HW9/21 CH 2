@@ -1,0 +1,23 @@
+// Change: avoid duplicate constants by scanning existing ones
+
+static uint8_t identifierConstant(Token* name) {
+  ObjString* string = copyString(name->start, name->length);
+
+  // Check if this string already exists in the constant table
+  for (int i = 0; i < currentChunk()->constants.count; i++) {
+    Value value = currentChunk()->constants.values[i];
+
+    if (IS_OBJ(value)) {
+      ObjString* existing = AS_STRING(value);
+
+      if (existing->length == string->length &&
+          memcmp(existing->chars, string->chars, string->length) == 0) {
+        // Reuse existing constant instead of creating a new one
+        return i;
+      }
+    }
+  }
+
+  // Otherwise add as a new constant
+  return makeConstant(OBJ_VAL(string));
+}
