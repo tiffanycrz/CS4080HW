@@ -1,0 +1,73 @@
+// object.h
+
+// CHANGE:
+// AS_NATIVE must return the full ObjNative* (not just function pointer) to can access the new 'arity' field.
+#define AS_NATIVE(value) ((ObjNative*)AS_OBJ(value))
+
+typedef Value (*NativeFn)(int argCount, Value* args);
+
+// CHANGE:
+// Add 'arity' field to ObjNative
+typedef struct {
+  Obj obj;
+  NativeFn function;
+  int arity;  // NEW: expected number of arguments
+} ObjNative;
+
+// CHANGE:
+// Update constructor
+ObjNative* newNative(NativeFn function, int arity);
+
+
+// vm.c
+
+// defineNative()
+
+// CHANGE:
+// Pass arity
+static void defineNative(const char* name, NativeFn function, int arity) {
+  push(OBJ_VAL(copyString(name, (int)strlen(name))));
+  push(OBJ_VAL(newNative(function, arity))); // pass arity here
+  tableSet(&vm.globals, AS_STRING(vm.stack[0]), vm.stack[1]);
+  pop();
+  pop();
+}
+
+// initVM()
+
+// CHANGE:
+// Provide arity when registering natives, clock takes 0 args
+defineNative("clock", clockNative, 0);
+
+
+// callValue()
+
+// CHANGE:
+// Add arity validation before invoking native function
+case OBJ_NATIVE: {
+  ObjNative* native = AS_NATIVE(callee);
+
+  if (argCount != native->arity) {
+    runtimeError("Expected %d arguments but got %d.",
+                 native->arity, argCount);
+    return false;
+  }
+
+  Value result = native->function(argCount, vm.stackTop - argCount);
+
+  vm.stackTop -= argCount + 1;
+  push(result);
+  return true;
+}
+
+
+// FILE: memory.c (MODIFIED)
+
+// CHANGE:
+// Update newNative() implementation to store arity
+ObjNative* newNative(NativeFn function, int arity) {
+  ObjNative* native = ALLOCATE_OBJ(ObjNative, OBJ_NATIVE);
+  native->function = function;
+  native->arity = arity; // store expected argument count
+  return native;
+}
