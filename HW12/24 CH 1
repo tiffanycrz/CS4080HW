@@ -1,0 +1,173 @@
+static InterpretResult run() {
+  CallFrame* frame = &vm.frames[vm.frameCount - 1];
+
+  // CHANGE:
+  // Hoist instruction pointer into a local variable.
+  register uint8_t* ip = frame->ip;
+
+  // CHANGE:
+  // All instruction reads now use local 'ip' instead of frame->ip
+  #define READ_BYTE() (*ip++)
+
+  // CHANGE:
+  // Same idea for multi-byte reads
+  #define READ_SHORT() \
+    (ip += 2, (uint16_t)((ip[-2] << 8) | ip[-1]))
+
+  // CHANGE:
+  // Constants now read using local ip
+  #define READ_CONSTANT() \
+    (frame->closure->function->chunk.constants.values[READ_BYTE()])
+
+  #define READ_STRING() AS_STRING(READ_CONSTANT())
+
+  #define BINARY_OP(valueType, op) \
+    do { \
+      if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
+        runtimeError("Operands must be numbers."); \
+        return INTERPRET_RUNTIME_ERROR; \
+      } \
+      double b = AS_NUMBER(pop()); \
+      double a = AS_NUMBER(pop()); \
+      push(valueType(a op b)); \
+    } while (false)
+
+  for (;;) {
+
+#ifdef DEBUG_TRACE_EXECUTION
+    printf("          ");
+    for (Value* slot = vm.stack; slot < vm.stackTop; slot++) {
+      printf("[ ");
+      printValue(*slot);
+      printf(" ]");
+    }
+    printf("\n");
+
+    // CHANGE:
+    // Debug now uses local ip instead of frame->ip
+    disassembleInstruction(
+      &frame->closure->function->chunk,
+      (int)(ip - frame->closure->function->chunk.code)
+    );
+#endif
+
+    uint8_t instruction;
+    switch (instruction = READ_BYTE()) {
+
+      case OP_CONSTANT: {
+        Value constant = READ_CONSTANT();
+        push(constant);
+        break;
+      }
+
+      case OP_RETURN: {
+        Value result = pop();
+
+        closeUpvalues(frame->slots);
+
+        vm.frameCount--;
+
+        if (vm.frameCount == 0) {
+          pop();
+
+          // CHANGE 6:
+          // Before exiting, write ip back to frame
+          frame->ip = ip;
+
+          return INTERPRET_OK;
+        }
+
+        vm.stackTop = frame->slots;
+        push(result);
+
+        // CHANGE 7:
+        // When switching frames, sync ip back, then load new frame/ip
+        frame->ip = ip;
+        frame = &vm.frames[vm.frameCount - 1];
+        ip = frame->ip;
+
+        break;
+      }
+
+      case OP_CALL: {
+        int argCount = READ_BYTE();
+
+        // CHANGE 8:
+        // Sync ip before calling (callee may change frames)
+        frame->ip = ip;
+
+        if (!callValue(peek(argCount), argCount)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        // Reload frame + ip after call
+        frame = &vm.frames[vm.frameCount - 1];
+        ip = frame->ip;
+
+        break;
+      }
+
+      case OP_INVOKE: {
+        ObjString* method = READ_STRING();
+        int argCount = READ_BYTE();
+
+        frame->ip = ip;
+
+        if (!invoke(method, argCount)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        frame = &vm.frames[vm.frameCount - 1];
+        ip = frame->ip;
+
+        break;
+      }
+
+      case OP_SUPER_INVOKE: {
+        ObjString* method = READ_STRING();
+        int argCount = READ_BYTE();
+        ObjClass* superclass = AS_CLASS(pop());
+
+        frame->ip = ip;
+
+        if (!invokeFromClass(superclass, method, argCount)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        frame = &vm.frames[vm.frameCount - 1];
+        ip = frame->ip;
+
+        break;
+      }
+
+      case OP_JUMP: {
+        uint16_t offset = READ_SHORT();
+        ip += offset;  // CHANGE 9: use local ip
+        break;
+      }
+
+      case OP_JUMP_IF_FALSE: {
+        uint16_t offset = READ_SHORT();
+        if (isFalsey(peek(0))) ip += offset;
+        break;
+      }
+
+      case OP_LOOP: {
+        uint16_t offset = READ_SHORT();
+        ip -= offset;
+        break;
+      }
+
+      // the rest remains the same
+
+      default:
+        break;
+    }
+  }
+
+  #undef READ_BYTE
+  #undef READ_SHORT
+  #undef READ_CONSTANT
+  #undef READ_STRING
+  #undef BINARY_OP
+}
