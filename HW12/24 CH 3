@@ -1,0 +1,55 @@
+// object.h
+
+// CHANGE:
+typedef bool (*NativeFn)(int argCount, Value* args, Value* result);
+
+// CHANGE:
+// ObjNative unchanged structurally except it uses new NativeFn
+typedef struct {
+  Obj obj;
+  NativeFn function;
+  int arity;
+} ObjNative;
+
+ObjNative* newNative(NativeFn function, int arity);
+
+// CHANGE:
+// AS_NATIVE return full object
+#define AS_NATIVE(value) ((ObjNative*)AS_OBJ(value))
+
+// vm.c
+
+// CHANGE:
+// Register native with arity
+defineNative("clock", clockNative, 0);
+
+
+// CHANGE:
+// callValue() — native call handling updated
+case OBJ_NATIVE: {
+  ObjNative* native = AS_NATIVE(callee);
+
+  // Arity check (unchanged)
+  if (argCount != native->arity) {
+    runtimeError("Expected %d arguments but got %d.",
+                 native->arity, argCount);
+    return false;
+  }
+
+  // Prepare result slot
+  Value result;
+
+  // CALL NATIVE FUNCTION
+  // If it returns false → runtime error already reported
+  if (!native->function(argCount, vm.stackTop - argCount, &result)) {
+    return false; // propagate failure into VM
+  }
+
+  // Pop args + callee
+  vm.stackTop -= argCount + 1;
+
+  // Push result
+  push(result);
+
+  return true;
+}
