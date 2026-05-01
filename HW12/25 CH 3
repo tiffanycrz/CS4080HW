@@ -1,0 +1,19 @@
+fun Vector(x, y) {
+  return fun(method) {
+    if (method == "x") return x;
+    if (method == "y") return y;
+
+    if (method == "add") {
+      return fun(v) {
+        return Vector(x + v("x"), y + v("y"));
+      };
+    }
+  };
+}
+
+var a = Vector(2, 3);
+var b = Vector(4, 5);
+var c = a("add")(b);
+
+print c("x"); // 6
+print c("y"); // 8
