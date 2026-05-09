@@ -1,0 +1,12 @@
+// Replace OP_GET_PROPERTY:
+
+if (!bindMethod(instance->klass, name)) {
+  return INTERPRET_RUNTIME_ERROR;
+}
+
+// with
+
+if (!bindMethod(instance->klass, name)) {
+  pop();
+  push(NIL_VAL);
+}
