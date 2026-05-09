@@ -1,0 +1,19 @@
+// vm.c
+// OP_GET_PROPERTY
+
+Value key = pop();
+
+if (!IS_STRING(key)) {
+  runtimeError("Property name must be a string.");
+  return INTERPRET_RUNTIME_ERROR;
+}
+
+ObjString* name = AS_STRING(key);
+
+Value value;
+if (tableGet(&instance->fields, name, &value)) {
+  pop();
+  push(value);
+} else {
+  push(NIL_VAL);
+}
