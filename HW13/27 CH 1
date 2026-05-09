@@ -1,3 +1,4 @@
+// vm.c
 // Replace OP_GET_PROPERTY:
 
 if (!bindMethod(instance->klass, name)) {
