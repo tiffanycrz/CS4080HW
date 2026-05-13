@@ -1,0 +1,190 @@
+// object.h
+
+typedef struct {
+  Obj obj;
+
+  ObjString* name;
+
+  Table methods;
+
+  // Direct superclass pointer
+  struct ObjClass* superclass;
+
+} ObjClass;
+
+// vm.h
+
+typedef struct {
+
+  ObjClosure* closure;
+
+  uint8_t* ip;
+
+  Value* slots;
+
+  // Current BETA dispatch chain
+  ObjClosure** chain;
+
+  int chainCount;
+
+  int chainIndex;
+
+} CallFrame;
+
+// object.c
+
+ObjClass* newClass(ObjString* name) {
+  ObjClass* klass =
+      ALLOCATE_OBJ(ObjClass, OBJ_CLASS);
+
+  klass->name = name;
+
+  initTable(&klass->methods);
+
+  klass->superclass = NULL;
+
+  return klass;
+}
+
+// vm.c
+
+static int buildMethodChain(
+    ObjClass* klass,
+    ObjString* name,
+    ObjClosure** outChain) {
+
+  // Temporary reverse stack
+  ObjClosure* reverse[256];
+
+  int count = 0;
+
+  // Walk upward first
+  while (klass != NULL) {
+
+    Value method;
+
+    if (tableGet(&klass->methods,
+                 name,
+                 &method)) {
+
+      reverse[count++] =
+          AS_CLOSURE(method);
+    }
+
+    klass = klass->superclass;
+  }
+
+  // Reverse order
+  // superclass first
+  for (int i = 0; i < count; i++) {
+    outChain[i] =
+        reverse[count - 1 - i];
+  }
+
+  return count;
+}
+
+static bool invoke(ObjString* name,
+                   int argCount) {
+
+  Value receiver = peek(argCount);
+
+  if (!IS_INSTANCE(receiver)) {
+    runtimeError(
+        "Only instances have methods.");
+    return false;
+  }
+
+  ObjInstance* instance =
+      AS_INSTANCE(receiver);
+
+  // Build BETA chain
+  ObjClosure* chain[256];
+
+  int count =
+      buildMethodChain(instance->klass,
+                       name,
+                       chain);
+
+  if (count == 0) {
+    runtimeError(
+        "Undefined method '%s'.",
+        name->chars);
+    return false;
+  }
+
+  // Call TOP method first
+  if (!call(chain[0], argCount)) {
+    return false;
+  }
+
+  // Save chain into frame
+  CallFrame* frame =
+      &vm.frames[vm.frameCount - 1];
+
+  frame->chainCount = count;
+  frame->chainIndex = 0;
+
+  // Copy chain
+  frame->chain =
+      ALLOCATE(ObjClosure*, count);
+
+  for (int i = 0; i < count; i++) {
+    frame->chain[i] = chain[i];
+  }
+
+  return true;
+}
+
+static Value innerNative(int argCount,
+                         Value* args) {
+
+  CallFrame* frame =
+      &vm.frames[vm.frameCount - 1];
+
+  int next =
+      frame->chainIndex + 1;
+
+  // No subclass implementation
+  if (next >= frame->chainCount) {
+    return NIL_VAL;
+  }
+
+  frame->chainIndex++;
+
+  // Call next method in chain
+  call(frame->chain[next], argCount);
+
+  return NIL_VAL;
+}
+
+// initVM()
+
+defineNative("inner", innerNative);
+
+case OP_INHERIT: {
+
+  Value superclass = peek(1);
+
+  if (!IS_CLASS(superclass)) {
+    runtimeError(
+      "Superclass must be a class.");
+    return INTERPRET_RUNTIME_ERROR;
+  }
+
+  ObjClass* subclass =
+      AS_CLASS(peek(0));
+
+  ObjClass* superklass =
+      AS_CLASS(superclass);
+
+  tableAddAll(&superklass->methods,
+              &subclass->methods);
+
+  subclass->superclass =
+      superklass;
+
+  pop();
+
+  break;
+}
