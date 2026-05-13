@@ -1,0 +1,34 @@
+// vm.c
+
+case OP_SET_PROPERTY: {
+
+  if (!IS_INSTANCE(peek(1))) {
+    runtimeError("Only instances have fields.");
+    return INTERPRET_RUNTIME_ERROR;
+  }
+
+  ObjInstance* instance = AS_INSTANCE(peek(1));
+
+  ObjString* name = READ_STRING();
+
+  // Check if field already exists.
+  Value existing;
+  if (tableGet(&instance->fields, name, &existing)) {
+
+    runtimeError(
+      "Field '%s' already defined.",
+      name->chars);
+
+    return INTERPRET_RUNTIME_ERROR;
+  }
+
+  // Original assignment
+  tableSet(&instance->fields, name, peek(0));
+
+  Value value = pop();
+  pop();
+
+  push(value);
+
+  break;
+}
