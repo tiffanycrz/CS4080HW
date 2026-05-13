@@ -6,8 +6,8 @@ typedef struct {
 
   Table methods;
 
-  // Cached pointer to init() method.
-  // NULL if class has no initializer.
+  // Cached pointer to init() method
+  // NULL if class has no initializer
   ObjClosure* initializer;
 
 } ObjClass;
